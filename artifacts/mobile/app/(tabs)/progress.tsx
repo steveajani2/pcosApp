@@ -151,13 +151,19 @@ export default function ProgressScreen() {
       </View>
 
       {totalDays >= 7 && (
-        <View style={[styles.exportCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
-          <Feather name="file-text" size={24} color={colors.mutedForeground} />
-          <View style={{ flex: 1 }}>
-            <Text style={[styles.exportTitle, { color: colors.foreground, fontFamily: "Inter_500Medium" }]}>Doctor's summary</Text>
-            <Text style={[styles.exportDesc, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>After 30 days you'll be able to export a symptom summary for your appointment</Text>
+        <Pressable
+          onPress={() => router.push("/report")}
+          style={({ pressed }) => [styles.exportCard, { backgroundColor: colors.card, borderColor: colors.primary + "55", opacity: pressed ? 0.85 : 1 }]}
+        >
+          <View style={[styles.exportIconWrap, { backgroundColor: colors.primary + "18" }]}>
+            <Feather name="file-text" size={22} color={colors.primary} />
           </View>
-        </View>
+          <View style={{ flex: 1 }}>
+            <Text style={[styles.exportTitle, { color: colors.foreground, fontFamily: "Inter_600SemiBold" }]}>Doctor's report</Text>
+            <Text style={[styles.exportDesc, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>View and export a symptom summary PDF to share at your next appointment</Text>
+          </View>
+          <Feather name="chevron-right" size={18} color={colors.mutedForeground} />
+        </Pressable>
       )}
     </ScrollView>
   );
@@ -175,6 +181,7 @@ const styles = StyleSheet.create({
   milestonesTitle: { fontSize: 16, marginBottom: 12 },
   milestonesList: { gap: 10 },
   exportCard: { flexDirection: "row", alignItems: "center", gap: 14, borderRadius: 16, borderWidth: 1, padding: 18, marginTop: 20 },
+  exportIconWrap: { width: 46, height: 46, borderRadius: 14, alignItems: "center", justifyContent: "center" },
   exportTitle: { fontSize: 15, marginBottom: 4 },
   exportDesc: { fontSize: 13, lineHeight: 18 },
 });
