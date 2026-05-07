@@ -1,0 +1,79 @@
+## One Liner
+
+The first daily wellness companion built specifically for PCOS — tracks how you feel, spots the patterns your doctor missed, and tells you what your body needs today.
+
+## Problem
+
+200 million women have PCOS. Every single one has been told to eat healthy and reduce stress by a doctor with seven minutes to spare. Most period and health apps are passive data collectors — you log, you see a chart, nothing happens. Women with PCOS don't need more data. They need someone to make sense of it for them, every single day, in a way that's specific to their body and not someone else's.
+
+## Idea
+
+Elara is a daily wellness companion built exclusively for the PCOS experience. Every day, users log how they feel — energy, mood, cravings, bloating, stress, acne, cycle changes. Elara takes that input and gives something specific back: what to eat today, how to move, what to avoid, and what their patterns are telling them. Over time it surfaces connections they've never seen — 'your anxiety spikes three days before your cycle,' 'your worst cravings follow your worst sleep' — so they stop feeling like their body is working against them and start feeling like they finally understand it.
+
+## KPIs
+
+- **North Star:** Daily active users completing their morning check-in
+- Symptom log streak length, insight engagement rate, subscription conversion, 30-day retention, NPS
+
+## Revenue Strategy
+
+- Freemium: basic symptom tracking free
+- Premium: $9.99/month for personalized daily guidance, pattern insights, and AI companion
+- Annual plan: $79.99/year
+- B2B: PCOS clinic and endocrinologist white-label tool
+- Brand partnerships: PCOS-specific supplement and nutrition brands
+
+## ICP
+
+Women aged 18—40 diagnosed with or suspected of having PCOS. Particularly strong with women who feel dismissed by their doctors, have tried multiple apps and found them generic, and are actively seeking community and understanding around their condition.
+
+## Pages
+
+- Daily Check-In: energy, mood, cravings, bloating, stress, acne, cycle
+- Today's Guidance: meals, movement, recovery recommendations
+- Pattern Insights: recurring connections surfaced over time
+- AI Companion: conversational support and reflections
+- Cycle View: current phase and what to expect
+- Progress: streaks, patterns discovered, milestones
+
+## User Flows
+
+- Daily: Open app → Morning check-in (2 minutes) → Receive today's guidance → Read insight
+- Weekly: Review patterns surfaced → See connections → Adjust lifestyle
+- Monthly: Full cycle review → Export summary for doctor appointment
+
+## One Paragraph Pitch
+
+200 million women have PCOS. Most have been dismissed, misdiagnosed, and handed advice that was never built for them. Elara is the first companion that actually listens — tracking how you feel daily, spotting the patterns your doctor missed, and telling you what your body needs today, not what worked for someone else.
+
+[Market Research](https://www.notion.so/Market-Research-3564c05459a8815fb541d9b5acb7fa9c?pvs=21)
+
+[Requirements](https://www.notion.so/Requirements-3564c05459a8816088f5d7c619851332?pvs=21)
+
+[Revenue Strategy](https://www.notion.so/Revenue-Strategy-3564c05459a88143a137d14cd350d47e?pvs=21)
+
+[Brand](https://www.notion.so/Brand-3564c05459a881e69453d696c9a85d50?pvs=21)
+
+[Go-to-Market](https://www.notion.so/Go-to-Market-3564c05459a881248edfde09772ca326?pvs=21)
+
+[Legal & Compliance](https://www.notion.so/Legal-Compliance-3564c05459a881088953ef70e1091d6b?pvs=21)
+
+[Investor Pitch](https://www.notion.so/Investor-Pitch-3564c05459a881158683c0f245835457?pvs=21)
+
+[MVP Timeline](https://www.notion.so/MVP-Timeline-3564c05459a8816eaa66c715ecd1d79d?pvs=21)
+
+[Dream Team](https://www.notion.so/Dream-Team-3564c05459a881f1a664c21b8306284e?pvs=21)
+
+[Competitive Analysis](https://www.notion.so/Competitive-Analysis-3564c05459a8810abf99c83349fc3f24?pvs=21)
+
+[Marketing Hub](https://www.notion.so/Marketing-Hub-3564c05459a881d4b5b3e516fde60cb4?pvs=21)
+
+[Landing Page Copy](https://www.notion.so/Landing-Page-Copy-3564c05459a8812ca5d0ef142116c91e?pvs=21)
+
+[Ideas](https://www.notion.so/Ideas-3564c05459a88175aebfec17b471046a?pvs=21)
+
+[Exit Strategy](https://www.notion.so/Exit-Strategy-3564c05459a881998420f8cde56b74b5?pvs=21)
+
+[Our Tools](https://www.notion.so/Our-Tools-3564c05459a88165b6c3dd4b90f43df0?pvs=21)
+
+[Backlog](https://www.notion.so/Backlog-3564c05459a881c7a41deb5e0da8bccc?pvs=21)
