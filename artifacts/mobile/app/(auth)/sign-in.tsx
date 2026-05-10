@@ -1,12 +1,12 @@
-import { Feather, MaterialCommunityIcons } from "@expo/vector-icons";
+import { Feather } from "@expo/vector-icons";
 import { BlurView } from "expo-blur";
 import * as Haptics from "expo-haptics";
 import { LinearGradient } from "expo-linear-gradient";
-import * as LocalAuthentication from "expo-local-authentication";
 import { router } from "expo-router";
-import React, { useState, useEffect } from "react";
+import React, { useState } from "react";
 import {
   ActivityIndicator,
+  Dimensions,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -17,8 +17,6 @@ import {
   TouchableOpacity,
   View,
   useColorScheme,
-  Dimensions,
-  Alert,
 } from "react-native";
 import Animated, { FadeInDown, FadeInUp } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -27,7 +25,7 @@ import { supabase } from "@/lib/supabase";
 import { useColors } from "@/hooks/useColors";
 import { activateDevBypass } from "../_layout";
 
-const { width, height } = Dimensions.get("window");
+const { width } = Dimensions.get("window");
 
 export default function SignInScreen() {
   const colors = useColors();
@@ -40,42 +38,6 @@ export default function SignInScreen() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [showPassword, setShowPassword] = useState(false);
-  const [biometricType, setBiometricType] = useState<LocalAuthentication.AuthenticationType[]>([]);
-
-  useEffect(() => {
-    checkBiometrics();
-  }, []);
-
-  async function checkBiometrics() {
-    const hasHardware = await LocalAuthentication.hasHardwareAsync();
-    const isEnrolled = await LocalAuthentication.isEnrolledAsync();
-    if (hasHardware && isEnrolled) {
-      const types = await LocalAuthentication.supportedAuthenticationTypesAsync();
-      setBiometricType(types);
-    }
-  }
-
-  async function onBiometricSignIn() {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    
-    const result = await LocalAuthentication.authenticateAsync({
-      promptMessage: "Sign in to Nylaia",
-      fallbackLabel: "Use password",
-      disableDeviceFallback: false,
-    });
-
-    if (result.success) {
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      // Note: In a production app, you would retrieve stored credentials or a refresh token here.
-      // For now, we show a success message or proceed if the session is already valid.
-      const { data: { session } } = await supabase.auth.getSession();
-      if (session) {
-        router.replace("/(tabs)");
-      } else {
-        Alert.alert("Biometric Auth Success", "Please sign in with your password once to link your biometrics.");
-      }
-    }
-  }
 
   async function onSignIn() {
     if (!email.trim() || !password) return;
@@ -92,16 +54,12 @@ export default function SignInScreen() {
     if (authError) {
       setError(authError.message);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-      return;
     }
+    // On success, AuthGate in _layout.tsx handles the redirect automatically
   }
-
-  const hasFaceId = biometricType.includes(LocalAuthentication.AuthenticationType.FACIAL_RECOGNITION);
-  const hasFingerprint = biometricType.includes(LocalAuthentication.AuthenticationType.FINGERPRINT);
 
   return (
     <View style={[styles.root, { backgroundColor: colors.background }]}>
-      {/* Nylaia Aurora Background */}
       <View style={StyleSheet.absoluteFill}>
         <LinearGradient
           colors={isDark ? ["#0A0A0A", "#1A1416"] : ["#FDF2F5", "#F8F9FA"]}
@@ -111,32 +69,22 @@ export default function SignInScreen() {
         <View style={[styles.bloom, { bottom: -150, right: -100, backgroundColor: colors.luteal + "15", width: width, height: width, borderRadius: width * 0.5 }]} />
       </View>
 
-      <KeyboardAvoidingView
-        style={{ flex: 1 }}
-        behavior={Platform.OS === "ios" ? "padding" : undefined}
-      >
+      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : undefined}>
         <ScrollView
           contentContainerStyle={[styles.scroll, { paddingTop: insets.top + 60, paddingBottom: insets.bottom + 40 }]}
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
         >
-          {/* Hero Branding */}
           <Animated.View entering={FadeInDown.duration(800).springify()} style={styles.hero}>
             <Text style={[styles.brand, { color: colors.tint, fontFamily: "Inter_700Bold" }]}>NYLAIA</Text>
-            <Text style={[styles.title, { color: colors.foreground, fontFamily: "Inter_700Bold" }]}>
-              Welcome back
-            </Text>
+            <Text style={[styles.title, { color: colors.foreground, fontFamily: "Inter_700Bold" }]}>Welcome back</Text>
             <View style={[styles.titleUnderline, { backgroundColor: colors.tint }]} />
           </Animated.View>
 
-          {/* Glassmorphism Card */}
-          <Animated.View 
-            entering={FadeInUp.delay(200).duration(1000).springify()} 
-            style={styles.cardContainer}
-          >
+          <Animated.View entering={FadeInUp.delay(200).duration(1000).springify()} style={styles.cardContainer}>
             <BlurView intensity={isDark ? 40 : 60} style={[styles.glassCard, { borderColor: colors.border + "40" }]}>
               <View style={[styles.cardContent, { backgroundColor: isDark ? "rgba(255,255,255,0.03)" : "rgba(255,255,255,0.4)" }]}>
-                
+
                 {error && (
                   <View style={[styles.errorBox, { backgroundColor: colors.destructive + "15" }]}>
                     <Feather name="alert-circle" size={14} color={colors.destructive} />
@@ -184,52 +132,37 @@ export default function SignInScreen() {
                   </View>
                 </View>
 
-                <View style={styles.actionRow}>
-                  <TouchableOpacity
-                    onPress={onSignIn}
-                    disabled={loading || !email.trim() || !password}
-                    activeOpacity={0.8}
-                    style={styles.signInBtnWrapper}
+                <TouchableOpacity
+                  onPress={onSignIn}
+                  disabled={loading || !email.trim() || !password}
+                  activeOpacity={0.8}
+                  style={styles.signInBtnWrapper}
+                >
+                  <LinearGradient
+                    colors={[colors.tint, colors.luteal]}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 0 }}
+                    style={[styles.signInBtn, { opacity: loading || !email.trim() || !password ? 0.6 : 1 }]}
                   >
-                    <LinearGradient
-                      colors={[colors.tint, colors.luteal]}
-                      start={{ x: 0, y: 0 }}
-                      end={{ x: 1, y: 0 }}
-                      style={[styles.signInBtn, { opacity: loading || !email.trim() || !password ? 0.6 : 1 }]}
-                    >
-                      {loading ? (
-                        <ActivityIndicator size="small" color="#fff" />
-                      ) : (
-                        <>
-                          <Text style={[styles.signInBtnText, { fontFamily: "Inter_700Bold" }]}>Sign In</Text>
-                          <Feather name="arrow-right" size={18} color="#fff" />
-                        </>
-                      )}
-                    </LinearGradient>
-                  </TouchableOpacity>
-
-                  {(hasFaceId || hasFingerprint) && (
-                    <TouchableOpacity
-                      onPress={onBiometricSignIn}
-                      style={[styles.biometricBtn, { borderColor: colors.tint + "40", backgroundColor: isDark ? "rgba(255,255,255,0.05)" : "rgba(255,255,255,0.3)" }]}
-                    >
-                      <MaterialCommunityIcons 
-                        name={hasFaceId ? "face-recognition" : "fingerprint"} 
-                        size={28} 
-                        color={colors.tint} 
-                      />
-                    </TouchableOpacity>
-                  )}
-                </View>
+                    {loading ? (
+                      <ActivityIndicator size="small" color="#fff" />
+                    ) : (
+                      <>
+                        <Text style={[styles.signInBtnText, { fontFamily: "Inter_700Bold" }]}>Sign In</Text>
+                        <Feather name="arrow-right" size={18} color="#fff" />
+                      </>
+                    )}
+                  </LinearGradient>
+                </TouchableOpacity>
               </View>
             </BlurView>
           </Animated.View>
 
-          {/* Footer */}
           <Animated.View entering={FadeInUp.delay(400).duration(800)} style={styles.footer}>
             <TouchableOpacity onPress={() => router.push("/(auth)/sign-up")} style={styles.footerBtn}>
               <Text style={[styles.footerText, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
-                New to Nylaia? <Text style={[styles.footerLink, { color: colors.tint, fontFamily: "Inter_600SemiBold" }]}>Create an account</Text>
+                New to Nylaia?{" "}
+                <Text style={[styles.footerLink, { color: colors.tint, fontFamily: "Inter_600SemiBold" }]}>Create an account</Text>
               </Text>
             </TouchableOpacity>
           </Animated.View>
@@ -278,11 +211,9 @@ const styles = StyleSheet.create({
   forgotText: { fontSize: 11 },
   passRow: { flexDirection: "row", alignItems: "center" },
   eyeBtn: { padding: 4 },
-  actionRow: { flexDirection: "row", gap: 12, alignItems: "center" },
-  signInBtnWrapper: { flex: 1, height: 56, borderRadius: 20, overflow: "hidden" },
+  signInBtnWrapper: { width: "100%", height: 56, borderRadius: 20, overflow: "hidden" },
   signInBtn: { flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 10 },
   signInBtnText: { color: "#fff", fontSize: 16, letterSpacing: 0.5 },
-  biometricBtn: { width: 56, height: 56, borderRadius: 20, borderWidth: 1, alignItems: "center", justifyContent: "center" },
   footer: { marginTop: 32 },
   footerBtn: { padding: 10 },
   footerText: { fontSize: 14 },
