@@ -1,4 +1,3 @@
-import AsyncStorage from "@react-native-async-storage/async-storage";
 import React, {
   createContext,
   useCallback,
@@ -6,6 +5,8 @@ import React, {
   useEffect,
   useState,
 } from "react";
+
+import { supabase } from "@/lib/supabase";
 
 export type CheckIn = {
   id: string;
@@ -43,7 +44,17 @@ export type GuidanceItem = {
   description: string;
 };
 
+export type CartItem = {
+  id: string;
+  productId: string;
+  name: string;
+  price: string;
+  image?: string;
+  quantity: number;
+};
+
 type AppContextType = {
+  userId: string | null;
   checkIns: CheckIn[];
   settings: Settings;
   isLoading: boolean;
@@ -55,6 +66,9 @@ type AppContextType = {
   getCyclePhase: () => CyclePhase;
   getTodayGuidance: () => GuidanceItem[];
   getInsights: () => Insight[];
+  cartItems: CartItem[];
+  addToCart: (item: Omit<CartItem, "id" | "quantity">) => void;
+  clearCart: () => void;
 };
 
 const defaultSettings: Settings = {
@@ -64,53 +78,165 @@ const defaultSettings: Settings = {
   onboarded: false,
 };
 
-const CHECKINS_KEY = "@elara/checkins";
-const SETTINGS_KEY = "@elara/settings";
-
 const AppContext = createContext<AppContextType | null>(null);
 
 export function AppProvider({ children }: { children: React.ReactNode }) {
+  const [userId, setUserId] = useState<string | null>(null);
   const [checkIns, setCheckIns] = useState<CheckIn[]>([]);
   const [settings, setSettings] = useState<Settings>(defaultSettings);
+  const [cartItems, setCartItems] = useState<CartItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
     async function load() {
-      try {
-        const [rawCheckIns, rawSettings] = await Promise.all([
-          AsyncStorage.getItem(CHECKINS_KEY),
-          AsyncStorage.getItem(SETTINGS_KEY),
-        ]);
-        if (rawCheckIns) setCheckIns(JSON.parse(rawCheckIns));
-        if (rawSettings) setSettings({ ...defaultSettings, ...JSON.parse(rawSettings) });
-      } catch {}
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) {
+        setIsLoading(false);
+        return;
+      }
+
+      const uid = session.user.id;
+      setUserId(uid);
+
+      const [{ data: checkInsData }, { data: profileData }] = await Promise.all([
+        supabase
+          .from("check_ins")
+          .select("*")
+          .eq("user_id", uid)
+          .order("date", { ascending: false }),
+        supabase
+          .from("profiles")
+          .select("name, cycle_start_date, cycle_length, onboarded")
+          .eq("id", uid)
+          .single(),
+      ]);
+
+      if (checkInsData) {
+        setCheckIns(
+          checkInsData.map((c: any) => ({
+            id: c.id,
+            date: c.date,
+            energy: c.energy,
+            mood: c.mood,
+            cravings: c.cravings,
+            bloating: c.bloating,
+            stress: c.stress,
+            acne: c.acne,
+            hasPeriod: c.has_period,
+            notes: c.notes,
+          }))
+        );
+      }
+
+      if (profileData) {
+        setSettings({
+          name: profileData.name ?? "",
+          cycleStartDate: profileData.cycle_start_date ?? defaultSettings.cycleStartDate,
+          cycleLength: profileData.cycle_length ?? 35,
+          onboarded: profileData.onboarded ?? false,
+        });
+      }
+
       setIsLoading(false);
     }
+
     load();
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (!session) {
+        setUserId(null);
+        setCheckIns([]);
+        setSettings(defaultSettings);
+        setIsLoading(false);
+      } else {
+        // New sign-in after a sign-out — re-load data for the new user
+        load();
+      }
+    });
+
+    return () => subscription.unsubscribe();
   }, []);
 
   const addCheckIn = useCallback(async (data: Omit<CheckIn, "id">) => {
-    const id = Date.now().toString() + Math.random().toString(36).substr(2, 9);
-    const checkIn: CheckIn = { id, ...data };
-    setCheckIns((prev) => {
-      const filtered = prev.filter((c) => c.date !== data.date);
-      const updated = [checkIn, ...filtered].sort((a, b) => b.date.localeCompare(a.date));
-      AsyncStorage.setItem(CHECKINS_KEY, JSON.stringify(updated));
-      return updated;
+    const tempId = `temp-${Date.now()}`;
+
+    // Always update local state immediately
+    setCheckIns(prev => {
+      const filtered = prev.filter(c => c.date !== data.date);
+      return [{ id: tempId, ...data }, ...filtered].sort((a, b) => b.date.localeCompare(a.date));
+    });
+
+    if (!userId) return; // skip Supabase sync when not authenticated
+
+    const { data: result, error } = await supabase
+      .from("check_ins")
+      .upsert(
+        {
+          user_id: userId,
+          date: data.date,
+          energy: data.energy,
+          mood: data.mood,
+          cravings: data.cravings,
+          bloating: data.bloating,
+          stress: data.stress,
+          acne: data.acne,
+          has_period: data.hasPeriod,
+          notes: data.notes,
+        },
+        { onConflict: "user_id,date" }
+      )
+      .select()
+      .single();
+
+    if (error) {
+      console.error("Failed to persist check-in", error);
+      setCheckIns(prev => prev.filter(c => c.id !== tempId));
+      return;
+    }
+
+    if (result) {
+      setCheckIns(prev =>
+        prev.map(c => c.id === tempId ? { ...c, id: result.id } : c)
+      );
+    }
+  }, [userId]);
+
+  const updateSettings = useCallback(async (partial: Partial<Settings>) => {
+    setSettings(prev => ({ ...prev, ...partial })); // always update local state
+
+    if (!userId) return; // skip Supabase sync when not authenticated
+
+    const dbPartial: Record<string, unknown> = {};
+    if (partial.name !== undefined) dbPartial.name = partial.name;
+    if (partial.cycleStartDate !== undefined) dbPartial.cycle_start_date = partial.cycleStartDate;
+    if (partial.cycleLength !== undefined) dbPartial.cycle_length = partial.cycleLength;
+    if (partial.onboarded !== undefined) dbPartial.onboarded = partial.onboarded;
+
+    const { error } = await supabase
+      .from("profiles")
+      .update(dbPartial)
+      .eq("id", userId);
+
+    if (error) console.error("Failed to update settings", error);
+  }, [userId]);
+
+  const addToCart = useCallback((item: Omit<CartItem, "id" | "quantity">) => {
+    setCartItems(prev => {
+      const existing = prev.find(p => p.productId === item.productId);
+      if (existing) {
+        return prev.map(p => p.productId === item.productId ? { ...p, quantity: p.quantity + 1 } : p);
+      }
+      return [...prev, { ...item, id: Math.random().toString(36).substr(2, 9), quantity: 1 }];
     });
   }, []);
 
-  const updateSettings = useCallback(async (partial: Partial<Settings>) => {
-    setSettings((prev) => {
-      const updated = { ...prev, ...partial };
-      AsyncStorage.setItem(SETTINGS_KEY, JSON.stringify(updated));
-      return updated;
-    });
+  const clearCart = useCallback(() => {
+    setCartItems([]);
   }, []);
 
   const getTodayCheckIn = useCallback((): CheckIn | null => {
     const today = new Date().toISOString().split("T")[0];
-    return checkIns.find((c) => c.date === today) ?? null;
+    return checkIns.find(c => c.date === today) ?? null;
   }, [checkIns]);
 
   const getStreak = useCallback((): number => {
@@ -133,7 +259,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     const diff = Math.floor((today.getTime() - start.getTime()) / 86400000);
-    return ((diff % settings.cycleLength) + settings.cycleLength) % settings.cycleLength + 1;
+    const len = Math.max(1, settings.cycleLength);
+    return ((diff % len) + len) % len + 1;
   }, [settings]);
 
   const getCyclePhase = useCallback((): CyclePhase => {
@@ -209,14 +336,14 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
     if (checkIns.length >= 7) {
       const recent = checkIns.slice(0, 14);
-      const highStressEntries = recent.filter((c) => c.stress >= 4);
-      const highCravingAfterStress = highStressEntries.filter((c) => c.cravings >= 4);
+      const highStressEntries = recent.filter(c => c.stress >= 4);
+      const highCravingAfterStress = highStressEntries.filter(c => c.cravings >= 4);
       if (highCravingAfterStress.length > 2) {
         insights.push({ id: "i_stress_cravings", title: "Stress drives your cravings", description: `On ${highCravingAfterStress.length} of your recent high-stress days, cravings also spiked. Cortisol directly elevates blood sugar, triggering carb cravings — a core PCOS cycle to break.`, type: "correlation" });
       }
 
-      const lowEnergyEntries = recent.filter((c) => c.energy <= 2);
-      const bloatingWithLowEnergy = lowEnergyEntries.filter((c) => c.bloating >= 3);
+      const lowEnergyEntries = recent.filter(c => c.energy <= 2);
+      const bloatingWithLowEnergy = lowEnergyEntries.filter(c => c.bloating >= 3);
       if (bloatingWithLowEnergy.length > 2) {
         insights.push({ id: "i_energy_bloating", title: "Bloating dampens your energy", description: `Low energy and bloating appeared together ${bloatingWithLowEnergy.length} times recently. Gut inflammation is a known energy drain — an anti-inflammatory food focus may help.`, type: "correlation" });
       }
@@ -252,14 +379,14 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     }
 
     if (insights.length === 0) {
-      insights.push({ id: "i_early", title: "Keep logging to see patterns", description: "Insights appear after 7 days of check-ins. The patterns Elara surfaces are based on your unique symptom history — not generic PCOS data.", type: "pattern" });
+      insights.push({ id: "i_early", title: "Keep logging to see patterns", description: "Insights appear after 7 days of check-ins. The patterns Nylaia surfaces are based on your unique symptom history — not generic PCOS data.", type: "pattern" });
     }
 
     return insights;
   }, [checkIns, getStreak]);
 
   return (
-    <AppContext.Provider value={{ checkIns, settings, isLoading, addCheckIn, updateSettings, getTodayCheckIn, getStreak, getCycleDay, getCyclePhase, getTodayGuidance, getInsights }}>
+    <AppContext.Provider value={{ userId, checkIns, settings, isLoading, addCheckIn, updateSettings, getTodayCheckIn, getStreak, getCycleDay, getCyclePhase, getTodayGuidance, getInsights, cartItems, addToCart, clearCart }}>
       {children}
     </AppContext.Provider>
   );

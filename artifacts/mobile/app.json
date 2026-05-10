@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "Elara",
+    "name": "Nylaia",
     "slug": "mobile",
     "version": "1.0.0",
     "orientation": "portrait",
@@ -14,9 +14,16 @@
       "backgroundColor": "#FAF8F5"
     },
     "ios": {
-      "supportsTablet": false
+      "supportsTablet": false,
+      "bundleIdentifier": "com.nylaia.app",
+      "infoPlist": {
+        "NSPhotoLibraryUsageDescription": "Nylaia uses your photo library to add images to community posts.",
+        "NSCameraUsageDescription": "Nylaia uses your camera to capture images for community posts."
+      }
     },
-    "android": {},
+    "android": {
+      "package": "com.nylaia.app"
+    },
     "web": {
       "favicon": "./assets/images/icon.png"
     },
@@ -28,7 +35,8 @@
         }
       ],
       "expo-font",
-      "expo-web-browser"
+      "expo-web-browser",
+      "expo-image-picker"
     ],
     "experiments": {
       "typedRoutes": true,

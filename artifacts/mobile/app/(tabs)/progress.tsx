@@ -1,6 +1,7 @@
 import { Feather } from "@expo/vector-icons";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { router } from "expo-router";
-import React from "react";
+import React, { useEffect } from "react";
 import {
   Platform,
   Pressable,
@@ -8,11 +9,17 @@ import {
   StyleSheet,
   Text,
   View,
+  TouchableOpacity,
 } from "react-native";
+import * as Haptics from "expo-haptics";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { LinearGradient } from "expo-linear-gradient";
+import Animated, { FadeInUp, FadeInDown, useAnimatedStyle, useSharedValue, withRepeat, withSequence, withTiming, interpolate } from "react-native-reanimated";
 
 import { useApp } from "@/context/AppContext";
 import { useColors } from "@/hooks/useColors";
+import { AssistantButton } from "../../components/AssistantButton";
+import { OnboardingTour, TourStep } from "../../components/OnboardingTour";
 
 type Milestone = { id: string; title: string; desc: string; target: number; icon: keyof typeof Feather.glyphMap; color: string };
 
@@ -26,27 +33,44 @@ const MILESTONES: Milestone[] = [
 
 function StreakDisplay({ streak }: { streak: number }) {
   const colors = useColors();
+  const pulse = useSharedValue(1);
+
+  React.useEffect(() => {
+    pulse.value = withRepeat(withSequence(withTiming(1.1, { duration: 1000 }), withTiming(1, { duration: 1000 })), -1, true);
+  }, []);
+
+  const glowStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: pulse.value }],
+    opacity: interpolate(pulse.value, [1, 1.1], [0.3, 0.6]),
+  }));
+
   return (
-    <View style={[sStyles.container, { backgroundColor: colors.primary + "18", borderColor: colors.primary + "33" }]}>
+    <Animated.View entering={FadeInUp.delay(200)} style={[sStyles.container, { backgroundColor: colors.card, borderColor: colors.border, overflow: 'hidden' }]}>
+      <LinearGradient
+        colors={[colors.primary + "15", "transparent"]}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={StyleSheet.absoluteFill}
+      />
       <View style={sStyles.row}>
         <View>
-          <Text style={[sStyles.streakNum, { color: colors.primary, fontFamily: "Inter_700Bold" }]}>{streak}</Text>
-          <Text style={[sStyles.streakLabel, { color: colors.primary, fontFamily: "Inter_500Medium" }]}>
-            {streak === 1 ? "day streak" : "day streak"}
+          <Text style={[sStyles.streakNum, { color: colors.foreground, fontFamily: "Inter_700Bold" }]}>{streak}</Text>
+          <Text style={[sStyles.streakLabel, { color: colors.mutedForeground, fontFamily: "Inter_600SemiBold" }]}>
+            {streak === 1 ? "DAY STREAK" : "DAY STREAK"}
           </Text>
         </View>
-        <View style={[sStyles.flame, { backgroundColor: colors.primary + "22" }]}>
-          <Feather name="zap" size={32} color={colors.primary} />
+        <View style={sStyles.iconStack}>
+           <Animated.View style={[sStyles.iconGlow, glowStyle, { backgroundColor: "#9B7EC8" }]} />
+           <View style={[sStyles.flame, { backgroundColor: "#9B7EC815" }]}>
+             <Feather name="zap" size={28} color="#9B7EC8" />
+           </View>
         </View>
       </View>
-      {streak === 0 ? (
-        <Text style={[sStyles.hint, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>Complete today's check-in to start your streak</Text>
-      ) : streak < 7 ? (
-        <Text style={[sStyles.hint, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>{7 - streak} more day{7 - streak !== 1 ? "s" : ""} to your first week milestone</Text>
-      ) : (
-        <Text style={[sStyles.hint, { color: colors.primary, fontFamily: "Inter_500Medium" }]}>Showing up consistently. Keep going.</Text>
-      )}
-    </View>
+      <View style={[sStyles.divider, { backgroundColor: colors.border }]} />
+      <Text style={[sStyles.hint, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
+        {streak === 0 ? "Complete today's check-in to start your streak" : "Consistency is key to hormonal balance. Keep it up!"}
+      </Text>
+    </Animated.View>
   );
 }
 
@@ -55,7 +79,15 @@ function MilestoneCard({ milestone, count }: { milestone: Milestone; count: numb
   const achieved = count >= milestone.target;
   const progress = Math.min(1, count / milestone.target);
   return (
-    <View style={[mStyles.card, { backgroundColor: colors.card, borderColor: achieved ? milestone.color + "66" : colors.border, opacity: achieved ? 1 : 0.65 }]}>
+    <View style={[mStyles.card, { backgroundColor: colors.card, borderColor: achieved ? milestone.color + "66" : colors.border, opacity: achieved ? 1 : 0.65, overflow: 'hidden' }]}>
+      {achieved && (
+        <LinearGradient
+          colors={[milestone.color + "20", "transparent"]}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={StyleSheet.absoluteFill}
+        />
+      )}
       <View style={[mStyles.icon, { backgroundColor: achieved ? milestone.color + "22" : colors.muted }]}>
         <Feather name={milestone.icon} size={20} color={achieved ? milestone.color : colors.mutedForeground} />
       </View>
@@ -117,99 +149,156 @@ export default function ProgressScreen() {
   const topPad = Platform.OS === "web" ? 67 : insets.top;
   const botPad = Platform.OS === "web" ? 34 + 84 : 84 + insets.bottom;
 
+  const [showOnboarding, setShowOnboarding] = React.useState(false);
+  const scrollRef = React.useRef<ScrollView>(null);
+
+  useEffect(() => {
+    AsyncStorage.getItem("@nylaia/tour_seen_progress").then(v => { if (!v) setShowOnboarding(true); });
+  }, []);
+
+  const finishTour = () => {
+    AsyncStorage.setItem("@nylaia/tour_seen_progress", "1");
+    setShowOnboarding(false);
+  };
+
+  const progressSteps: TourStep[] = [
+      { 
+          title: "Consistency Tracking", 
+          desc: "Monitor your logging streak. Consistency is key to accurate protocol synthesis.",
+          pointerTop: 160,
+      },
+      { 
+          title: "Bio-Data Trends", 
+          desc: "Visualize your energy, mood, and stress levels over the last 14 days.",
+          pointerTop: 300,
+      },
+      { 
+          title: "Milestones", 
+          desc: "Unlock achievements as you build long-term hormonal balance habits.",
+          pointerTop: 540,
+      }
+  ];
+
   return (
-    <ScrollView
-      style={[styles.root, { backgroundColor: colors.background }]}
-      contentContainerStyle={[styles.scroll, { paddingTop: topPad + 20, paddingBottom: botPad }]}
-      showsVerticalScrollIndicator={false}
-    >
-      <View style={styles.header}>
-        <View>
-          <Text style={[styles.title, { color: colors.foreground, fontFamily: "Inter_700Bold" }]}>Your progress</Text>
-          <Text style={[styles.subtitle, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>{totalDays} total check-in{totalDays !== 1 ? "s" : ""}</Text>
-        </View>
-        <Pressable
-          onPress={() => router.push("/companion")}
-          style={({ pressed }) => [styles.companionBtn, { backgroundColor: colors.primary + "18", borderColor: colors.primary + "44", opacity: pressed ? 0.8 : 1 }]}
-        >
-          <Feather name="message-circle" size={18} color={colors.primary} />
-          <Text style={[styles.companionText, { color: colors.primary, fontFamily: "Inter_500Medium" }]}>Talk to Elara</Text>
-        </Pressable>
-      </View>
+    <View style={[styles.root, { backgroundColor: colors.background }]}>
+      <OnboardingTour
+          visible={showOnboarding}
+          onFinish={finishTour}
+          steps={progressSteps}
+          onStepChange={(step) => {
+              if (step === 1) scrollRef.current?.scrollTo({ y: 150, animated: true });
+              if (step === 2) scrollRef.current?.scrollTo({ y: 350, animated: true });
+          }}
+      />
+      {/* Immersive Bloom Background */}
+      <View style={[styles.bloom, { backgroundColor: colors.primary + "08" }]} />
 
-      <StreakDisplay streak={streak} />
-
-      <SymptomChart />
-
-      <View style={styles.milestonesSection}>
-        <Text style={[styles.milestonesTitle, { color: colors.foreground, fontFamily: "Inter_600SemiBold" }]}>Milestones</Text>
-        <View style={styles.milestonesList}>
-          {MILESTONES.map((m) => (
-            <MilestoneCard key={m.id} milestone={m} count={totalDays} />
-          ))}
-        </View>
-      </View>
-
-      {totalDays >= 7 && (
-        <Pressable
-          onPress={() => router.push("/report")}
-          style={({ pressed }) => [styles.exportCard, { backgroundColor: colors.card, borderColor: colors.primary + "55", opacity: pressed ? 0.85 : 1 }]}
-        >
-          <View style={[styles.exportIconWrap, { backgroundColor: colors.primary + "18" }]}>
-            <Feather name="file-text" size={22} color={colors.primary} />
+      <ScrollView
+        ref={scrollRef}
+        contentContainerStyle={[styles.scroll, { paddingTop: topPad + 24, paddingBottom: botPad }]}
+        showsVerticalScrollIndicator={false}
+      >
+        <Animated.View entering={FadeInUp.delay(100)} style={[styles.header, { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }]}>
+          <View>
+            <Text style={[styles.title, { color: colors.foreground, fontFamily: "Inter_700Bold" }]}>Your Progress</Text>
+            <Text style={[styles.subtitle, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>{totalDays} check-ins logged</Text>
           </View>
-          <View style={{ flex: 1 }}>
-            <Text style={[styles.exportTitle, { color: colors.foreground, fontFamily: "Inter_600SemiBold" }]}>Doctor's report</Text>
-            <Text style={[styles.exportDesc, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>View and export a symptom summary PDF to share at your next appointment</Text>
+          <View style={{ flexDirection: 'row', gap: 12, alignItems: 'center' }}>
+              <TouchableOpacity 
+                  onPress={() => {
+                      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                      setShowOnboarding(true);
+                  }}
+                  style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: colors.muted, alignItems: 'center', justifyContent: 'center' }}
+              >
+                  <Feather name="help-circle" size={18} color={colors.foreground} />
+              </TouchableOpacity>
+              <AssistantButton label="ASK NYLAIA" />
           </View>
-          <Feather name="chevron-right" size={18} color={colors.mutedForeground} />
-        </Pressable>
-      )}
-    </ScrollView>
+        </Animated.View>
+
+        <StreakDisplay streak={streak} />
+
+        <Animated.View entering={FadeInUp.delay(300)}>
+            <SymptomChart />
+        </Animated.View>
+
+        <View style={styles.milestonesSection}>
+          <Text style={[styles.milestonesTitle, { color: colors.foreground, fontFamily: "Inter_700Bold" }]}>Milestones</Text>
+          <View style={styles.milestonesList}>
+            {MILESTONES.map((m, i) => (
+              <Animated.View key={m.id} entering={FadeInUp.delay(400 + (i * 100))}>
+                <MilestoneCard milestone={m} count={totalDays} />
+              </Animated.View>
+            ))}
+          </View>
+        </View>
+
+        {totalDays >= 7 && (
+          <Animated.View entering={FadeInUp.delay(800)}>
+            <Pressable
+              onPress={() => router.push("/report")}
+              style={({ pressed }) => [styles.exportCard, { backgroundColor: colors.card, borderColor: colors.border, opacity: pressed ? 0.85 : 1 }]}
+            >
+              <View style={[styles.exportIconWrap, { backgroundColor: colors.primary + "15" }]}>
+                <Feather name="file-text" size={22} color={colors.primary} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={[styles.exportTitle, { color: colors.foreground, fontFamily: "Inter_700Bold" }]}>Doctor's report</Text>
+                <Text style={[styles.exportDesc, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>Export a detailed summary PDF for your next visit.</Text>
+              </View>
+              <Feather name="chevron-right" size={18} color={colors.mutedForeground} />
+            </Pressable>
+          </Animated.View>
+        )}
+      </ScrollView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   root: { flex: 1 },
+  bloom: { position: 'absolute', top: 0, left: 0, right: 0, height: 300, borderRadius: 150, transform: [{ scale: 1.5 }], opacity: 0.5 },
   scroll: { paddingHorizontal: 20 },
-  header: { flexDirection: "row", alignItems: "flex-start", justifyContent: "space-between", marginBottom: 24 },
-  title: { fontSize: 26, marginBottom: 4 },
+  header: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 32 },
+  title: { fontSize: 28, letterSpacing: -1 },
   subtitle: { fontSize: 14 },
-  companionBtn: { flexDirection: "row", alignItems: "center", gap: 6, borderRadius: 20, borderWidth: 1, paddingHorizontal: 14, paddingVertical: 8 },
-  companionText: { fontSize: 13 },
-  milestonesSection: { marginTop: 4 },
-  milestonesTitle: { fontSize: 16, marginBottom: 12 },
-  milestonesList: { gap: 10 },
-  exportCard: { flexDirection: "row", alignItems: "center", gap: 14, borderRadius: 16, borderWidth: 1, padding: 18, marginTop: 20 },
-  exportIconWrap: { width: 46, height: 46, borderRadius: 14, alignItems: "center", justifyContent: "center" },
-  exportTitle: { fontSize: 15, marginBottom: 4 },
+  milestonesSection: { marginTop: 28 },
+  milestonesTitle: { fontSize: 18, marginBottom: 16, letterSpacing: -0.4 },
+  milestonesList: { gap: 12 },
+  exportCard: { flexDirection: "row", alignItems: "center", gap: 16, borderRadius: 24, borderWidth: 1, padding: 20, marginTop: 24 },
+  exportIconWrap: { width: 48, height: 48, borderRadius: 16, alignItems: "center", justifyContent: "center" },
+  exportTitle: { fontSize: 16, marginBottom: 4 },
   exportDesc: { fontSize: 13, lineHeight: 18 },
 });
 
 const sStyles = StyleSheet.create({
-  container: { borderRadius: 20, borderWidth: 1, padding: 20, marginBottom: 20 },
-  row: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 10 },
-  streakNum: { fontSize: 56 },
-  streakLabel: { fontSize: 15, marginTop: -6 },
-  flame: { width: 60, height: 60, borderRadius: 30, alignItems: "center", justifyContent: "center" },
-  hint: { fontSize: 13, lineHeight: 18 },
+  container: { borderRadius: 32, borderWidth: 1, padding: 24, marginBottom: 24 },
+  row: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 16 },
+  streakNum: { fontSize: 64, letterSpacing: -2 },
+  streakLabel: { fontSize: 12, letterSpacing: 1.5, marginTop: -4 },
+  iconStack: { alignItems: 'center', justifyContent: 'center' },
+  iconGlow: { position: 'absolute', width: 50, height: 50, borderRadius: 25 },
+  flame: { width: 64, height: 64, borderRadius: 32, alignItems: "center", justifyContent: "center", zIndex: 1 },
+  divider: { height: 1, marginBottom: 16, opacity: 0.5 },
+  hint: { fontSize: 13, lineHeight: 20 },
 });
 
 const mStyles = StyleSheet.create({
-  card: { flexDirection: "row", alignItems: "center", gap: 14, borderRadius: 16, borderWidth: 1, padding: 16 },
-  icon: { width: 44, height: 44, borderRadius: 12, alignItems: "center", justifyContent: "center" },
-  title: { fontSize: 14, marginBottom: 4 },
-  desc: { fontSize: 12 },
-  track: { height: 4, borderRadius: 2, marginTop: 8, overflow: "hidden" },
-  fill: { height: "100%", borderRadius: 2 },
+  card: { flexDirection: "row", alignItems: "center", gap: 16, borderRadius: 24, borderWidth: 1, padding: 20 },
+  icon: { width: 48, height: 48, borderRadius: 16, alignItems: "center", justifyContent: "center" },
+  title: { fontSize: 15, marginBottom: 4 },
+  desc: { fontSize: 12, opacity: 0.8 },
+  track: { height: 6, borderRadius: 3, marginTop: 10, overflow: "hidden" },
+  fill: { height: "100%", borderRadius: 3 },
 });
 
 const cStyles = StyleSheet.create({
-  container: { borderRadius: 18, borderWidth: 1, padding: 18, marginBottom: 20 },
-  title: { fontSize: 15, marginBottom: 16 },
-  metricRow: { flexDirection: "row", alignItems: "center", gap: 12, marginBottom: 12 },
-  metricLabel: { width: 46, fontSize: 12 },
-  bars: { flex: 1, flexDirection: "row", gap: 3, height: 32, alignItems: "flex-end" },
-  barOuter: { flex: 1, height: "100%", borderRadius: 3, overflow: "hidden", justifyContent: "flex-end" },
-  barInner: { width: "100%", borderRadius: 3 },
+  container: { borderRadius: 32, borderWidth: 1, padding: 24, marginBottom: 24 },
+  title: { fontSize: 16, marginBottom: 20, letterSpacing: -0.4 },
+  metricRow: { flexDirection: "row", alignItems: "center", gap: 16, marginBottom: 16 },
+  metricLabel: { width: 50, fontSize: 12 },
+  bars: { flex: 1, flexDirection: "row", gap: 4, height: 40, alignItems: "flex-end" },
+  barOuter: { flex: 1, height: "100%", borderRadius: 4, overflow: "hidden", justifyContent: "flex-end" },
+  barInner: { width: "100%", borderRadius: 4 },
 });

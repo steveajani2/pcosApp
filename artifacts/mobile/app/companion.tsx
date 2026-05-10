@@ -1,8 +1,8 @@
 import { Feather } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
-import { fetch } from "expo/fetch";
+import { LinearGradient } from "expo-linear-gradient";
 import { router } from "expo-router";
-import React, { useEffect, useRef, useState } from "react";
+import React, { useRef, useState } from "react";
 import {
   FlatList,
   Platform,
@@ -19,176 +19,135 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useApp } from "@/context/AppContext";
 import { useColors } from "@/hooks/useColors";
 
-const BASE_URL = `https://${process.env.EXPO_PUBLIC_DOMAIN}`;
-
 type Message = {
   id: string;
-  role: "elara" | "user";
+  role: "nylaia" | "user";
   text: string;
-  streaming?: boolean;
 };
 
 const WELCOME: Message = {
   id: "welcome",
-  role: "elara",
-  text: "Hello. I'm Elara — your PCOS companion. I'm here to help you understand your symptoms, navigate your condition, and feel less alone in this. What's on your mind today?",
+  role: "nylaia",
+  text: "Hello. I'm Nylaia — your PCOS companion. I'm here to help you understand your symptoms, navigate your condition, and feel less alone in this. What's on your mind today?",
 };
 
-async function getOrCreateConversation(): Promise<number> {
-  const res = await fetch(`${BASE_URL}/api/anthropic/conversations`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ title: "Elara Chat" }),
-  });
-  const data = await res.json() as { id: number };
-  return data.id;
+function getResponse(message: string, phase: string, checkIn: any): string {
+  const lower = message.toLowerCase();
+
+  if (lower.match(/stress|anxious|anxiety|overwhelm|cortisol/)) {
+    return "Stress is one of the biggest disruptors of hormonal balance in PCOS. Elevated cortisol directly spikes insulin and androgens. Try box breathing (4 counts in, 4 hold, 4 out, 4 hold) for 5 minutes before bed. A 20-minute walk after meals lowers cortisol more effectively than most supplements.";
+  }
+  if (lower.match(/diet|food|eat|meal|nutrition|bloat|craving/)) {
+    return "For PCOS, a low-glycemic approach is most evidence-backed. Lead every meal with 25-30g of protein before adding carbs — this stabilises blood sugar, which drives most PCOS symptoms. Spearmint tea twice daily has also shown real benefits for androgen levels. Avoid eating large meals late in the evening.";
+  }
+  if (lower.match(/sleep|tired|fatigue|exhaust|energy/)) {
+    return "Poor sleep raises cortisol and worsens insulin resistance — both of which directly worsen PCOS. Prioritize getting to bed before 11pm. Magnesium glycinate (200-400mg) before sleep helps many women with PCOS improve sleep quality. Avoid screens 1 hour before bed.";
+  }
+  if (lower.match(/exercise|workout|gym|movement|walk/)) {
+    return "For PCOS, resistance training is the most effective type of movement — it improves insulin sensitivity long-term. Walking 10 minutes after meals is also highly effective. Avoid high-intensity cardio daily, as it can spike cortisol. Align your workouts with your cycle phase: high-intensity in follicular and ovulation, gentler in luteal and menstrual.";
+  }
+  if (lower.match(/weight|fat|bmi|belly|waist/)) {
+    return "Weight changes in PCOS are mostly driven by insulin resistance, not just calorie intake. Reducing processed carbs and increasing protein is more effective than cutting calories. Strength training 3x weekly builds muscle that acts as a \"glucose sink,\" improving insulin sensitivity. Be patient — hormonal weight is slower to shift but does respond to consistent lifestyle changes.";
+  }
+  if (lower.match(/skin|acne|hair|hirsut|androgens|testosterone/)) {
+    return "Elevated androgens — often the cause of acne and excess hair growth in PCOS — are driven by insulin resistance. Reducing sugar, refined carbs, and dairy often helps. Spearmint tea (2 cups daily) has clinical evidence for lowering free testosterone. Inositol supplements (especially Ovasitol) also show strong results for androgen reduction.";
+  }
+  if (lower.match(/period|irregular|cycle|menstrual|ovulation|fertility/)) {
+    return "Irregular cycles in PCOS are usually caused by anovulation — the follicle doesn't release an egg. The most impactful levers are reducing insulin resistance (diet, exercise, inositol) and managing stress (cortisol disrupts the LH surge needed for ovulation). Tracking your cycle in this app will help identify patterns over time.";
+  }
+  if (lower.match(/supplement|myo.inositol|ovasitol|vitamin|magnesium|zinc/)) {
+    return "The most evidence-backed supplements for PCOS are: Myo-inositol + D-chiro-inositol (40:1 ratio, like Ovasitol) for insulin resistance and ovulation, Magnesium glycinate for cortisol and sleep, Vitamin D3 (most PCOS women are deficient), and Zinc for androgens and acne. Always check with your doctor before starting new supplements.";
+  }
+  if (lower.match(/doctor|gp|specialist|medication|metformin|contraceptive|pill/)) {
+    return "Working with a PCOS-informed endocrinologist or gynaecologist is important. Common treatments include metformin (for insulin resistance), combined oral contraceptives (for cycle regulation and androgen management), and letrozole (for ovulation induction). Document your symptoms using the check-in feature so you have data to share at your appointment.";
+  }
+  if (lower.match(/feel|mood|sad|depressed|low|emot/)) {
+    return "PCOS has a strong link to mood — elevated androgens, blood sugar swings, and sleep disruption all affect serotonin and dopamine. You're not imagining it. Consistent tracking will help you spot patterns. Many women find their mood improves significantly when blood sugar is stable. If you're consistently struggling, please speak with your doctor or a therapist.";
+  }
+  if (lower.match(/hello|hi|hey|how are|good morning|good afternoon|good evening/)) {
+    return `Hi! I'm here with you. ${phase !== "unknown" ? `You're currently in your ${phase} phase — ${getPhaseNote(phase)}` : "Log your first check-in to unlock personalized phase guidance."} What would you like to talk about today?`;
+  }
+  if (lower.match(/thank|thanks|helpful|good|great|perfect/)) {
+    return "I'm glad that was helpful. Remember, managing PCOS is a long game — small, consistent changes compound over time. Keep logging your symptoms and I'll continue to reflect patterns back to you. You're doing great.";
+  }
+
+  // Contextual fallback using check-in data
+  if (checkIn) {
+    if (checkIn.stress >= 4) {
+      return `Based on your recent check-in, your stress is elevated. That's worth addressing first — high cortisol disrupts nearly every PCOS symptom. Is there something specific that's been stressing you lately, or would you like some strategies for managing it?`;
+    }
+    if (checkIn.energy <= 2) {
+      return `I see your energy has been low recently. In the ${phase} phase, that's not unusual, but it's worth looking at sleep quality and blood sugar stability. What does your morning routine look like — are you eating breakfast within an hour of waking?`;
+    }
+  }
+
+  return `That's a great question. While AI-powered personalised responses are coming soon, I can share that many of the answers to PCOS challenges come from understanding your own patterns. Keep logging your daily symptoms — the data you're building is genuinely valuable for both self-understanding and for conversations with your healthcare provider.\n\nIs there a specific aspect of PCOS you'd like to understand better? I can share evidence-based guidance on nutrition, movement, supplements, sleep, or hormones.`;
+}
+
+function getPhaseNote(phase: string): string {
+  const notes: Record<string, string> = {
+    menstrual: "rest is a priority right now.",
+    follicular: "your energy is rising — good time for new goals.",
+    ovulation: "you're at peak vitality.",
+    luteal: "your body may need extra support and nourishment.",
+  };
+  return notes[phase] ?? "";
 }
 
 export default function CompanionScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
-  const { checkIns, getStreak, getCyclePhase } = useApp();
+  const { checkIns, getCyclePhase } = useApp();
+
+  const phase = getCyclePhase();
+  const latestCheckIn = checkIns[0] ?? null;
 
   const [messages, setMessages] = useState<Message[]>([WELCOME]);
   const [input, setInput] = useState("");
-  const [isStreaming, setIsStreaming] = useState(false);
-  const [conversationId, setConversationId] = useState<number | null>(null);
+  const [isTyping, setIsTyping] = useState(false);
   const flatRef = useRef<FlatList<Message>>(null);
-  const streamingIdRef = useRef<string | null>(null);
 
-  useEffect(() => {
-    getOrCreateConversation().then(setConversationId).catch(() => {});
-  }, []);
+  const topPad = Platform.OS === "web" ? 67 : insets.top;
 
-  const buildContextMessage = () => {
-    const phase = getCyclePhase();
-    const streak = getStreak();
-    const recentCheckIn = checkIns[0];
-    let ctx = "";
-    if (recentCheckIn) {
-      ctx += `[User context: last logged — energy ${recentCheckIn.energy}/5, mood ${recentCheckIn.mood}/5, stress ${recentCheckIn.stress}/5, bloating ${recentCheckIn.bloating}/5, cravings ${recentCheckIn.cravings}/5. Cycle phase: ${phase}. Logging streak: ${streak} days.]`;
-    } else {
-      ctx += `[User context: no check-ins logged yet. Cycle phase: ${phase}.]`;
-    }
-    return ctx;
-  };
-
-  async function sendMessage() {
+  function sendMessage() {
     const text = input.trim();
-    if (!text || isStreaming || !conversationId) return;
+    if (!text || isTyping) return;
 
     setInput("");
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
 
-    const userMsg: Message = {
-      id: Date.now().toString(),
-      role: "user",
-      text,
-    };
-    setMessages((prev) => [userMsg, ...prev]);
+    const userMsg: Message = { id: Date.now().toString(), role: "user", text };
+    setMessages(prev => [userMsg, ...prev]);
+    setIsTyping(true);
 
-    const streamId = (Date.now() + 1).toString();
-    streamingIdRef.current = streamId;
-    const elaraMsg: Message = { id: streamId, role: "elara", text: "", streaming: true };
-    setMessages((prev) => [elaraMsg, ...prev]);
-    setIsStreaming(true);
-
-    const contextPrefix = messages.length <= 1 ? buildContextMessage() + " " : "";
-    const fullContent = contextPrefix + text;
-
-    try {
-      const response = await fetch(
-        `${BASE_URL}/api/anthropic/conversations/${conversationId}/messages`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ content: fullContent }),
-        }
-      );
-
-      if (!response.body) throw new Error("No stream body");
-
-      const reader = response.body.getReader();
-      const decoder = new TextDecoder();
-      let buffer = "";
-
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-
-        buffer += decoder.decode(value, { stream: true });
-        const lines = buffer.split("\n");
-        buffer = lines.pop() ?? "";
-
-        for (const line of lines) {
-          if (!line.startsWith("data: ")) continue;
-          const jsonStr = line.slice(6).trim();
-          if (!jsonStr) continue;
-
-          try {
-            const data = JSON.parse(jsonStr) as { content?: string; done?: boolean; error?: string };
-            if (data.content) {
-              setMessages((prev) =>
-                prev.map((m) =>
-                  m.id === streamId ? { ...m, text: m.text + data.content } : m
-                )
-              );
-            }
-            if (data.done || data.error) {
-              setMessages((prev) =>
-                prev.map((m) =>
-                  m.id === streamId
-                    ? { ...m, streaming: false, text: data.error ? "Sorry, something went wrong. Please try again." : m.text }
-                    : m
-                )
-              );
-              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-            }
-          } catch {}
-        }
-      }
-    } catch {
-      setMessages((prev) =>
-        prev.map((m) =>
-          m.id === streamId
-            ? { ...m, streaming: false, text: "I'm having trouble connecting right now. Please try again in a moment." }
-            : m
-        )
-      );
-    } finally {
-      setIsStreaming(false);
-      streamingIdRef.current = null;
-    }
+    // Simulate a short typing delay for natural feel
+    setTimeout(() => {
+      const reply = getResponse(text, phase, latestCheckIn);
+      const nylaiaMsg: Message = { id: (Date.now() + 1).toString(), role: "nylaia", text: reply };
+      setMessages(prev => [nylaiaMsg, ...prev]);
+      setIsTyping(false);
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    }, 800);
   }
 
-  const topPad = Platform.OS === "web" ? 67 : insets.top;
-
   const renderItem = ({ item }: { item: Message }) => {
-    const isElara = item.role === "elara";
+    const isNylaia = item.role === "nylaia";
     return (
-      <View style={[styles.messageRow, isElara ? styles.messageRowElara : styles.messageRowUser]}>
-        {isElara && (
+      <View style={[styles.messageRow, isNylaia ? styles.rowNylaia : styles.rowUser]}>
+        {isNylaia && (
           <View style={[styles.avatar, { backgroundColor: colors.primary }]}>
-            <Text style={[styles.avatarText, { color: colors.primaryForeground, fontFamily: "Inter_600SemiBold" }]}>E</Text>
+            <Text style={[styles.avatarText, { color: colors.primaryForeground, fontFamily: "Inter_700Bold" }]}>N</Text>
           </View>
         )}
-        <View
-          style={[
-            styles.bubble,
-            isElara
-              ? { backgroundColor: colors.card, borderColor: colors.border, borderWidth: 1 }
-              : { backgroundColor: colors.primary },
-          ]}
-        >
-          <Text style={[styles.bubbleText, { color: isElara ? colors.foreground : colors.primaryForeground, fontFamily: "Inter_400Regular" }]}>
-            {item.text || (item.streaming ? "" : "")}
+        <View style={[
+          styles.bubble,
+          isNylaia
+            ? { backgroundColor: colors.card, borderColor: colors.border, borderWidth: 1 }
+            : { backgroundColor: colors.primary },
+        ]}>
+          <Text style={[styles.bubbleText, { color: isNylaia ? colors.foreground : colors.primaryForeground, fontFamily: "Inter_400Regular" }]}>
+            {item.text}
           </Text>
-          {item.streaming && item.text === "" && (
-            <Text style={[styles.typingText, { color: colors.mutedForeground }]}>Thinking...</Text>
-          )}
-          {item.streaming && item.text !== "" && (
-            <View style={[styles.cursor, { backgroundColor: colors.primary }]} />
-          )}
         </View>
       </View>
     );
@@ -196,33 +155,34 @@ export default function CompanionScreen() {
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
+      {/* Header */}
       <View style={[styles.header, { paddingTop: topPad, borderBottomColor: colors.border, backgroundColor: colors.background }]}>
         <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
           <Feather name="arrow-left" size={22} color={colors.foreground} />
         </TouchableOpacity>
         <View style={styles.headerCenter}>
           <View style={[styles.headerAvatar, { backgroundColor: colors.primary }]}>
-            <Text style={[styles.headerAvatarText, { color: colors.primaryForeground, fontFamily: "Inter_700Bold" }]}>E</Text>
+            <Text style={[styles.headerAvatarText, { color: colors.primaryForeground, fontFamily: "Inter_700Bold" }]}>N</Text>
           </View>
           <View>
-            <Text style={[styles.headerName, { color: colors.foreground, fontFamily: "Inter_600SemiBold" }]}>Elara</Text>
+            <Text style={[styles.headerName, { color: colors.foreground, fontFamily: "Inter_600SemiBold" }]}>Nylaia</Text>
             <View style={styles.statusRow}>
-              <View style={[styles.statusDot, { backgroundColor: colors.accent }]} />
+              <View style={[styles.statusDot, { backgroundColor: "#7ABD98" }]} />
               <Text style={[styles.headerSub, { color: colors.mutedForeground }]}>Your PCOS companion</Text>
             </View>
           </View>
         </View>
-        <TouchableOpacity
-          onPress={async () => {
-            if (!conversationId) return;
-            const newId = await getOrCreateConversation();
-            setConversationId(newId);
-            setMessages([WELCOME]);
-          }}
-          style={styles.newChatBtn}
-        >
+        <TouchableOpacity onPress={() => setMessages([WELCOME])} style={styles.newChatBtn}>
           <Feather name="edit" size={18} color={colors.mutedForeground} />
         </TouchableOpacity>
+      </View>
+
+      {/* AI coming soon banner */}
+      <View style={[styles.banner, { backgroundColor: colors.muted, borderBottomColor: colors.border }]}>
+        <Feather name="zap" size={12} color={colors.primary} />
+        <Text style={[styles.bannerText, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
+          Personalised AI responses are coming soon — sharing evidence-based guidance for now
+        </Text>
       </View>
 
       <KeyboardAvoidingView style={{ flex: 1 }} behavior="padding" keyboardVerticalOffset={0}>
@@ -230,41 +190,48 @@ export default function CompanionScreen() {
           ref={flatRef}
           data={messages}
           renderItem={renderItem}
-          keyExtractor={(m) => m.id}
+          keyExtractor={m => m.id}
           inverted
-          contentContainerStyle={[styles.listContent, { paddingBottom: 16 }]}
+          contentContainerStyle={styles.listContent}
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
           keyboardDismissMode="interactive"
+          ListFooterComponent={isTyping ? (
+            <View style={[styles.messageRow, styles.rowNylaia]}>
+              <View style={[styles.avatar, { backgroundColor: colors.primary }]}>
+                <Text style={[styles.avatarText, { color: colors.primaryForeground, fontFamily: "Inter_700Bold" }]}>N</Text>
+              </View>
+              <View style={[styles.bubble, { backgroundColor: colors.card, borderColor: colors.border, borderWidth: 1 }]}>
+                <Text style={[styles.bubbleText, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>Typing...</Text>
+              </View>
+            </View>
+          ) : null}
         />
 
         <View style={[styles.inputRow, { borderTopColor: colors.border, backgroundColor: colors.background, paddingBottom: insets.bottom > 0 ? insets.bottom : (Platform.OS === "web" ? 34 : 16) }]}>
           <TextInput
             value={input}
             onChangeText={setInput}
-            placeholder="Ask Elara anything..."
+            placeholder="Ask Nylaia anything about PCOS..."
             placeholderTextColor={colors.mutedForeground}
             style={[styles.input, { color: colors.foreground, backgroundColor: colors.muted, fontFamily: "Inter_400Regular" }]}
             returnKeyType="send"
             onSubmitEditing={sendMessage}
             multiline
-            editable={!isStreaming}
+            editable={!isTyping}
           />
           <Pressable
             onPress={sendMessage}
-            disabled={!input.trim() || isStreaming || !conversationId}
+            disabled={!input.trim() || isTyping}
             style={({ pressed }) => [
               styles.sendBtn,
-              {
-                backgroundColor: input.trim() && !isStreaming ? colors.primary : colors.muted,
-                opacity: pressed ? 0.8 : 1,
-              },
+              { backgroundColor: input.trim() && !isTyping ? colors.primary : colors.muted, opacity: pressed ? 0.8 : 1 },
             ]}
           >
             <Feather
-              name={isStreaming ? "loader" : "send"}
+              name="send"
               size={18}
-              color={input.trim() && !isStreaming ? colors.primaryForeground : colors.mutedForeground}
+              color={input.trim() && !isTyping ? colors.primaryForeground : colors.mutedForeground}
             />
           </Pressable>
         </View>
@@ -275,27 +242,27 @@ export default function CompanionScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  header: { flexDirection: "row", alignItems: "center", paddingHorizontal: 16, paddingBottom: 14, borderBottomWidth: 1 },
-  backBtn: { width: 36, height: 36, alignItems: "center", justifyContent: "center" },
-  headerCenter: { flex: 1, flexDirection: "row", alignItems: "center", gap: 10, paddingHorizontal: 8 },
-  headerAvatar: { width: 36, height: 36, borderRadius: 18, alignItems: "center", justifyContent: "center" },
-  headerAvatarText: { fontSize: 15 },
-  headerName: { fontSize: 16 },
-  statusRow: { flexDirection: "row", alignItems: "center", gap: 5 },
-  statusDot: { width: 6, height: 6, borderRadius: 3 },
-  headerSub: { fontSize: 12 },
-  newChatBtn: { width: 36, height: 36, alignItems: "center", justifyContent: "center" },
-  listContent: { padding: 16, gap: 12 },
+  header: { flexDirection: "row", alignItems: "center", paddingHorizontal: 14, paddingBottom: 12, borderBottomWidth: 1 },
+  backBtn: { width: 34, height: 34, alignItems: "center", justifyContent: "center" },
+  headerCenter: { flex: 1, flexDirection: "row", alignItems: "center", gap: 8, paddingHorizontal: 6 },
+  headerAvatar: { width: 32, height: 32, borderRadius: 16, alignItems: "center", justifyContent: "center" },
+  headerAvatarText: { fontSize: 13 },
+  headerName: { fontSize: 13 },
+  statusRow: { flexDirection: "row", alignItems: "center", gap: 4, marginTop: 1 },
+  statusDot: { width: 5, height: 5, borderRadius: 2.5 },
+  headerSub: { fontSize: 11 },
+  newChatBtn: { width: 34, height: 34, alignItems: "center", justifyContent: "center" },
+  banner: { flexDirection: "row", alignItems: "center", gap: 8, paddingHorizontal: 14, paddingVertical: 8, borderBottomWidth: 1 },
+  bannerText: { flex: 1, fontSize: 11, lineHeight: 16 },
+  listContent: { padding: 14, gap: 12, paddingBottom: 8 },
   messageRow: { flexDirection: "row", alignItems: "flex-end", gap: 8 },
-  messageRowElara: { justifyContent: "flex-start" },
-  messageRowUser: { justifyContent: "flex-end" },
-  avatar: { width: 30, height: 30, borderRadius: 15, alignItems: "center", justifyContent: "center", flexShrink: 0 },
-  avatarText: { fontSize: 13 },
-  bubble: { maxWidth: "78%", borderRadius: 18, padding: 14, flexDirection: "row", flexWrap: "wrap" },
-  bubbleText: { fontSize: 15, lineHeight: 22, flex: 1 },
-  typingText: { fontSize: 14 },
-  cursor: { width: 2, height: 16, marginLeft: 2, alignSelf: "flex-end", marginBottom: 2, opacity: 0.7 },
-  inputRow: { flexDirection: "row", alignItems: "flex-end", gap: 10, padding: 12, borderTopWidth: 1 },
-  input: { flex: 1, borderRadius: 22, paddingHorizontal: 16, paddingVertical: 10, fontSize: 15, maxHeight: 120, minHeight: 44 },
-  sendBtn: { width: 44, height: 44, borderRadius: 22, alignItems: "center", justifyContent: "center" },
+  rowNylaia: { justifyContent: "flex-start" },
+  rowUser: { justifyContent: "flex-end" },
+  avatar: { width: 28, height: 28, borderRadius: 14, alignItems: "center", justifyContent: "center", flexShrink: 0, marginBottom: 2 },
+  avatarText: { fontSize: 11 },
+  bubble: { maxWidth: "82%", borderRadius: 20, padding: 12 },
+  bubbleText: { fontSize: 14, lineHeight: 22 },
+  inputRow: { flexDirection: "row", alignItems: "flex-end", gap: 8, padding: 10, borderTopWidth: 1 },
+  input: { flex: 1, borderRadius: 20, paddingHorizontal: 14, paddingVertical: 8, fontSize: 14, maxHeight: 100, minHeight: 40 },
+  sendBtn: { width: 40, height: 40, borderRadius: 20, alignItems: "center", justifyContent: "center" },
 });

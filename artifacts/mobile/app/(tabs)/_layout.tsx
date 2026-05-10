@@ -20,9 +20,9 @@ function NativeTabLayout() {
         <Icon sf={{ default: "sun.max", selected: "sun.max.fill" }} />
         <Label>Guidance</Label>
       </NativeTabs.Trigger>
-      <NativeTabs.Trigger name="insights">
-        <Icon sf={{ default: "chart.line.uptrend.xyaxis", selected: "chart.line.uptrend.xyaxis" }} />
-        <Label>Insights</Label>
+      <NativeTabs.Trigger name="community">
+        <Icon sf={{ default: "person.2", selected: "person.2.fill" }} />
+        <Label>Social</Label>
       </NativeTabs.Trigger>
       <NativeTabs.Trigger name="cycle">
         <Icon sf={{ default: "moon.stars", selected: "moon.stars.fill" }} />
@@ -46,7 +46,7 @@ function ClassicTabLayout() {
   return (
     <Tabs
       screenOptions={{
-        tabBarActiveTintColor: colors.primary,
+        tabBarActiveTintColor: colors.tint,
         tabBarInactiveTintColor: colors.mutedForeground,
         headerShown: false,
         tabBarStyle: {
@@ -60,7 +60,7 @@ function ClassicTabLayout() {
         tabBarBackground: () =>
           isIOS ? (
             <BlurView
-              intensity={100}
+              intensity={80}
               tint={isDark ? "dark" : "light"}
               style={StyleSheet.absoluteFill}
             />
@@ -70,8 +70,10 @@ function ClassicTabLayout() {
             />
           ) : null,
         tabBarLabelStyle: {
-          fontFamily: "Inter_500Medium",
+          fontFamily: "Inter_600SemiBold",
           fontSize: 10,
+          textTransform: 'uppercase',
+          letterSpacing: 0.5,
         },
       }}
     >
@@ -100,14 +102,14 @@ function ClassicTabLayout() {
         }}
       />
       <Tabs.Screen
-        name="insights"
+        name="community"
         options={{
-          title: "Insights",
+          title: "Social",
           tabBarIcon: ({ color }) =>
             isIOS ? (
-              <SymbolView name="chart.line.uptrend.xyaxis" tintColor={color} size={22} />
+              <SymbolView name="person.2" tintColor={color} size={22} />
             ) : (
-              <Feather name="trending-up" size={22} color={color} />
+              <Feather name="users" size={22} color={color} />
             ),
         }}
       />
@@ -140,8 +142,5 @@ function ClassicTabLayout() {
 }
 
 export default function TabLayout() {
-  if (isLiquidGlassAvailable()) {
-    return <NativeTabLayout />;
-  }
   return <ClassicTabLayout />;
 }
